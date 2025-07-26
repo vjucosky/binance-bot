@@ -11,6 +11,7 @@
             "cwd": "${workspaceFolder}/etl/",
             "envFile": "${workspaceFolder}/etl/.env",
             "program": "main.py",
+            "args": ["--name", "ETHBTC", "LTCBTC", "--start", "01-2020", "--end", "12-2020"],
             "console": "integratedTerminal"
         }
     ]
