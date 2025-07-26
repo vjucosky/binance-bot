@@ -3,6 +3,9 @@ import requests
 
 from settings import DATABASE_SETTINGS, STAGE_FOLDER, ARCHIVE_FOLDER
 from sqlalchemy import Engine, create_engine, text
+from datetime import datetime, timedelta
+from argparse import ArgumentParser
+from calendar import monthrange
 from zipfile import ZipFile
 from pandas import read_csv
 from io import BytesIO
@@ -116,9 +119,28 @@ def load_kline_historical_data(engine: Engine, name: str, year: int, month: int)
 
 
 if __name__ == '__main__':
+    parser = ArgumentParser()
+
+    parser.add_argument('-n', '--name', action='extend', nargs='+', required=True)
+    parser.add_argument('-s', '--start', type=lambda x: datetime.strptime(x, '%m-%Y'), required=True)
+    parser.add_argument('-e', '--end', type=lambda x: datetime.strptime(x, '%m-%Y'), required=True)
+
+    args = parser.parse_args()
+
+    periods = [args.start, ]
+
+    while True:
+        period = periods[-1] + timedelta(days=monthrange(periods[-1].year, periods[-1].month)[1])
+
+        if period <= args.end:
+            periods.append(period)
+        else:
+            break
+
     engine = create_engine(**DATABASE_SETTINGS)
 
     sync_symbol_data(engine)
 
-    # Apenas para teste:
-    load_kline_historical_data(engine, 'ETHBTC', 2025, 1)
+    for name in args.name:
+        for period in periods:
+            load_kline_historical_data(engine, name, period.year, period.month)
