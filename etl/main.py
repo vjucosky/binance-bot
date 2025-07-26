@@ -3,9 +3,8 @@ import requests
 
 from settings import DATABASE_SETTINGS, STAGE_FOLDER, ARCHIVE_FOLDER
 from sqlalchemy import Engine, create_engine, text
-from datetime import datetime
 from zipfile import ZipFile
-from shutil import rmtree
+from pandas import read_csv
 from io import BytesIO
 
 
@@ -80,7 +79,46 @@ def sync_symbol_data(engine: Engine):
             connection.commit()
 
 
+def load_kline_historical_data(engine: Engine, name: str, year: int, month: int):
+    with engine.connect() as connection:
+        symbol_id = connection.execute(text('''
+            SELECT ID
+            FROM SYMBOL
+            WHERE [NAME] = :name
+        '''), {
+            'name': name
+        }).one()[0]
+
+    print(f'Downloading historical data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
+
+    request = requests.get(f'https://data.binance.vision/data/spot/monthly/klines/{name}/1m/{name}-1m-{year}-{month:02d}.zip')
+
+    with ZipFile(BytesIO(request.content)) as archive:
+        archive.extractall(STAGE_FOLDER)
+
+    for file in STAGE_FOLDER.rglob('*.csv'):
+        print(f'Loading file {file.name}')
+
+        data = file.open(encoding='UTF-8')
+
+        dataframe = read_csv(data, delimiter=',', header=None, names=['open_timestamp', 'open_value', 'high_value', 'low_value', 'close_value', 'base_asset_volume', 'close_timestamp', 'quote_asset_volume', 'trade_count', 'base_asset_taker_buy_volume', 'quote_asset_taker_buy_volume'], index_col=False, decimal='.')
+
+        dataframe['SYMBOL_ID'] = symbol_id
+
+        with engine.connect() as connection:
+            dataframe.to_sql('SYMBOL_KLINE', connection, if_exists='append', index=False, chunksize=10000)
+
+            connection.commit()
+
+        data.close()
+
+    file.rename(ARCHIVE_FOLDER / file.name)
+
+
 if __name__ == '__main__':
     engine = create_engine(**DATABASE_SETTINGS)
 
     sync_symbol_data(engine)
+
+    # Apenas para teste:
+    load_kline_historical_data(engine, 'ETHBTC', 2025, 1)
