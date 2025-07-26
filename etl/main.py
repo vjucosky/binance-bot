@@ -1,0 +1,86 @@
+import requests
+
+
+from settings import DATABASE_SETTINGS, STAGE_FOLDER, ARCHIVE_FOLDER
+from sqlalchemy import Engine, create_engine, text
+from datetime import datetime
+from zipfile import ZipFile
+from shutil import rmtree
+from io import BytesIO
+
+
+def sync_symbol_data(engine: Engine):
+    print(f'Downloading symbol data')
+
+    request = requests.get('https://api.binance.com/api/v3/exchangeInfo')
+
+    data = request.json()
+
+    with engine.connect() as connection:
+        for symbol in data['symbols']:
+            connection.execute(text('''
+                SET NOCOUNT ON
+
+                IF NOT EXISTS(
+                    SELECT 1
+                    FROM SYMBOL
+                    WHERE [NAME] = :name
+                )
+                BEGIN
+                    INSERT INTO SYMBOL (
+                        [NAME],
+                        BASE_ASSET_NAME,
+                        BASE_ASSET_PRECISION,
+                        QUOTE_ASSET_NAME,
+                        QUOTE_ASSET_PRECISION,
+                        IS_ICEBERG_ALLOWED,
+                        IS_OCO_ALLOWED,
+                        IS_SPOT_TRADING_ALLOWED,
+                        IS_MARGIN_TRADING_ALLOWED
+                    )
+                    VALUES (
+                        :name,
+                        :base_asset_name,
+                        :base_asset_precision,
+                        :quote_asset_name,
+                        :quote_asset_precision,
+                        :is_iceberg_allowed,
+                        :is_oco_allowed,
+                        :is_spot_trading_allowed,
+                        :is_margin_trading_allowed
+                    )
+                END
+                ELSE
+                BEGIN
+                    UPDATE SYMBOL
+                    SET
+                        BASE_ASSET_NAME = :base_asset_name,
+                        BASE_ASSET_PRECISION = :base_asset_precision,
+                        QUOTE_ASSET_NAME = :quote_asset_name,
+                        QUOTE_ASSET_PRECISION = :quote_asset_precision,
+                        IS_ICEBERG_ALLOWED = :is_iceberg_allowed,
+                        IS_OCO_ALLOWED = :is_oco_allowed,
+                        IS_SPOT_TRADING_ALLOWED = :is_spot_trading_allowed,
+                        IS_MARGIN_TRADING_ALLOWED = :is_margin_trading_allowed,
+                        UPDATED_AT = GETDATE()
+                    WHERE [NAME] = :name
+                END
+            '''), {
+                'name': symbol['symbol'],
+                'base_asset_name': symbol['baseAsset'],
+                'base_asset_precision': symbol['baseAssetPrecision'],
+                'quote_asset_name': symbol['quoteAsset'],
+                'quote_asset_precision': symbol['quoteAssetPrecision'],
+                'is_iceberg_allowed': symbol['icebergAllowed'],
+                'is_oco_allowed': symbol['ocoAllowed'],
+                'is_spot_trading_allowed': symbol['isSpotTradingAllowed'],
+                'is_margin_trading_allowed': symbol['isMarginTradingAllowed']
+            })
+
+            connection.commit()
+
+
+if __name__ == '__main__':
+    engine = create_engine(**DATABASE_SETTINGS)
+
+    sync_symbol_data(engine)
