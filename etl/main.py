@@ -18,6 +18,8 @@ def sync_symbol_data(engine: Engine):
 
     data = request.json()
 
+    print('Loading results')
+
     with engine.connect() as connection:
         for symbol in data['symbols']:
             connection.execute(text('''
@@ -25,11 +27,11 @@ def sync_symbol_data(engine: Engine):
 
                 IF NOT EXISTS(
                     SELECT 1
-                    FROM SYMBOL
+                    FROM BINANCE_SYMBOL
                     WHERE [NAME] = :name
                 )
                 BEGIN
-                    INSERT INTO SYMBOL (
+                    INSERT INTO BINANCE_SYMBOL (
                         [NAME],
                         BASE_ASSET_NAME,
                         BASE_ASSET_PRECISION,
@@ -54,7 +56,7 @@ def sync_symbol_data(engine: Engine):
                 END
                 ELSE
                 BEGIN
-                    UPDATE SYMBOL
+                    UPDATE BINANCE_SYMBOL
                     SET
                         BASE_ASSET_NAME = :base_asset_name,
                         BASE_ASSET_PRECISION = :base_asset_precision,
@@ -82,24 +84,24 @@ def sync_symbol_data(engine: Engine):
             connection.commit()
 
 
-def load_kline_historical_data(engine: Engine, name: str, year: int, month: int):
+def load_historical_kline_data(engine: Engine, name: str, year: int, month: int):
     with engine.connect() as connection:
         symbol_id = connection.execute(text('''
             SELECT ID
-            FROM SYMBOL
+            FROM BINANCE_SYMBOL
             WHERE [NAME] = :name
         '''), {
             'name': name
         }).one()[0]
 
-    print(f'Downloading historical data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
+    print(f'Downloading historical kline data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
 
     request = requests.get(f'https://data.binance.vision/data/spot/monthly/klines/{name}/1m/{name}-1m-{year}-{month:02d}.zip')
 
     with ZipFile(BytesIO(request.content)) as archive:
         archive.extractall(STAGE_FOLDER)
 
-    for file in STAGE_FOLDER.rglob('*.csv'):
+    for file in STAGE_FOLDER.glob('*.csv'):
         print(f'Loading file {file.name}')
 
         data = file.open(encoding='UTF-8')
@@ -109,7 +111,79 @@ def load_kline_historical_data(engine: Engine, name: str, year: int, month: int)
         dataframe['SYMBOL_ID'] = symbol_id
 
         with engine.connect() as connection:
-            dataframe.to_sql('SYMBOL_KLINE', connection, if_exists='append', index=False, chunksize=10000)
+            dataframe.to_sql('BINANCE_SYMBOL_KLINE', connection, if_exists='append', index=False, chunksize=10000)
+
+            connection.commit()
+
+        data.close()
+
+    file.rename(ARCHIVE_FOLDER / file.name)
+
+
+def load_historical_trade_data(engine: Engine, name: str, year: int, month: int):
+    with engine.connect() as connection:
+        symbol_id = connection.execute(text('''
+            SELECT ID
+            FROM BINANCE_SYMBOL
+            WHERE [NAME] = :name
+        '''), {
+            'name': name
+        }).one()[0]
+
+    print(f'Downloading historical trade data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
+
+    request = requests.get(f'https://data.binance.vision/data/spot/monthly/trades/{name}/{name}-trades-{year}-{month:02d}.zip')
+
+    with ZipFile(BytesIO(request.content)) as archive:
+        archive.extractall(STAGE_FOLDER)
+
+    for file in STAGE_FOLDER.glob('*.csv'):
+        print(f'Loading file {file.name}')
+
+        data = file.open(encoding='UTF-8')
+
+        dataframe = read_csv(data, delimiter=',', header=None, names=['number', 'asset_price', 'asset_quantity', 'value', 'execution_timestamp', 'is_buyer_maker', 'is_best_match'], index_col=False, decimal='.')
+
+        dataframe['SYMBOL_ID'] = symbol_id
+
+        with engine.connect() as connection:
+            dataframe.to_sql('BINANCE_SYMBOL_TRADE', connection, if_exists='append', index=False, chunksize=10000)
+
+            connection.commit()
+
+        data.close()
+
+    file.rename(ARCHIVE_FOLDER / file.name)
+
+
+def load_historical_aggtrade_data(engine: Engine, name: str, year: int, month: int):
+    with engine.connect() as connection:
+        symbol_id = connection.execute(text('''
+            SELECT ID
+            FROM BINANCE_SYMBOL
+            WHERE [NAME] = :name
+        '''), {
+            'name': name
+        }).one()[0]
+
+    print(f'Downloading historical aggtrade data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
+
+    request = requests.get(f'https://data.binance.vision/data/spot/monthly/aggTrades/{name}/{name}-aggTrades-{year}-{month:02d}.zip')
+
+    with ZipFile(BytesIO(request.content)) as archive:
+        archive.extractall(STAGE_FOLDER)
+
+    for file in STAGE_FOLDER.glob('*.csv'):
+        print(f'Loading file {file.name}')
+
+        data = file.open(encoding='UTF-8')
+
+        dataframe = read_csv(data, delimiter=',', header=None, names=['number', 'asset_price', 'asset_quantity', 'first_trade_number', 'last_trade_number', 'execution_timestamp', 'is_buyer_maker', 'is_best_match'], index_col=False, decimal='.')
+
+        dataframe['SYMBOL_ID'] = symbol_id
+
+        with engine.connect() as connection:
+            dataframe.to_sql('BINANCE_SYMBOL_AGGTRADE', connection, if_exists='append', index=False, chunksize=10000)
 
             connection.commit()
 
@@ -143,4 +217,6 @@ if __name__ == '__main__':
 
     for name in args.name:
         for period in periods:
-            load_kline_historical_data(engine, name, period.year, period.month)
+            load_historical_kline_data(engine, name, period.year, period.month)
+            load_historical_trade_data(engine, name, period.year, period.month)
+            load_historical_aggtrade_data(engine, name, period.year, period.month)
