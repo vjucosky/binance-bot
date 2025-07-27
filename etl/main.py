@@ -156,6 +156,42 @@ def load_historical_trade_data(engine: Engine, name: str, year: int, month: int)
     file.rename(ARCHIVE_FOLDER / file.name)
 
 
+def load_historical_aggtrade_data(engine: Engine, name: str, year: int, month: int):
+    with engine.connect() as connection:
+        symbol_id = connection.execute(text('''
+            SELECT ID
+            FROM BINANCE_SYMBOL
+            WHERE [NAME] = :name
+        '''), {
+            'name': name
+        }).one()[0]
+
+    print(f'Downloading historical aggtrade data for symbol {name} (ID {symbol_id}), period {month:02d}-{year}')
+
+    request = requests.get(f'https://data.binance.vision/data/spot/monthly/aggTrades/{name}/{name}-aggTrades-{year}-{month:02d}.zip')
+
+    with ZipFile(BytesIO(request.content)) as archive:
+        archive.extractall(STAGE_FOLDER)
+
+    for file in STAGE_FOLDER.glob('*.csv'):
+        print(f'Loading file {file.name}')
+
+        data = file.open(encoding='UTF-8')
+
+        dataframe = read_csv(data, delimiter=',', header=None, names=['number', 'asset_price', 'asset_quantity', 'first_trade_number', 'last_trade_number', 'execution_timestamp', 'is_buyer_maker', 'is_best_match'], index_col=False, decimal='.')
+
+        dataframe['SYMBOL_ID'] = symbol_id
+
+        with engine.connect() as connection:
+            dataframe.to_sql('BINANCE_SYMBOL_AGGTRADE', connection, if_exists='append', index=False, chunksize=10000)
+
+            connection.commit()
+
+        data.close()
+
+    file.rename(ARCHIVE_FOLDER / file.name)
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
 
@@ -183,3 +219,4 @@ if __name__ == '__main__':
         for period in periods:
             load_historical_kline_data(engine, name, period.year, period.month)
             load_historical_trade_data(engine, name, period.year, period.month)
+            load_historical_aggtrade_data(engine, name, period.year, period.month)
