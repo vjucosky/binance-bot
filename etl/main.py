@@ -25,11 +25,11 @@ def sync_symbol_data(engine: Engine):
 
                 IF NOT EXISTS(
                     SELECT 1
-                    FROM SYMBOL
+                    FROM BINANCE_SYMBOL
                     WHERE [NAME] = :name
                 )
                 BEGIN
-                    INSERT INTO SYMBOL (
+                    INSERT INTO BINANCE_SYMBOL (
                         [NAME],
                         BASE_ASSET_NAME,
                         BASE_ASSET_PRECISION,
@@ -54,7 +54,7 @@ def sync_symbol_data(engine: Engine):
                 END
                 ELSE
                 BEGIN
-                    UPDATE SYMBOL
+                    UPDATE BINANCE_SYMBOL
                     SET
                         BASE_ASSET_NAME = :base_asset_name,
                         BASE_ASSET_PRECISION = :base_asset_precision,
@@ -86,7 +86,7 @@ def load_kline_historical_data(engine: Engine, name: str, year: int, month: int)
     with engine.connect() as connection:
         symbol_id = connection.execute(text('''
             SELECT ID
-            FROM SYMBOL
+            FROM BINANCE_SYMBOL
             WHERE [NAME] = :name
         '''), {
             'name': name
@@ -99,7 +99,7 @@ def load_kline_historical_data(engine: Engine, name: str, year: int, month: int)
     with ZipFile(BytesIO(request.content)) as archive:
         archive.extractall(STAGE_FOLDER)
 
-    for file in STAGE_FOLDER.rglob('*.csv'):
+    for file in STAGE_FOLDER.glob('*.csv'):
         print(f'Loading file {file.name}')
 
         data = file.open(encoding='UTF-8')
@@ -109,7 +109,7 @@ def load_kline_historical_data(engine: Engine, name: str, year: int, month: int)
         dataframe['SYMBOL_ID'] = symbol_id
 
         with engine.connect() as connection:
-            dataframe.to_sql('SYMBOL_KLINE', connection, if_exists='append', index=False, chunksize=10000)
+            dataframe.to_sql('BINANCE_SYMBOL_KLINE', connection, if_exists='append', index=False, chunksize=10000)
 
             connection.commit()
 
