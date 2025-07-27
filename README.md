@@ -18,6 +18,8 @@ docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=my_super_secret_password" -n
 
 Após a subida da instância, execute o script disponível em `/sql/DDL.sql` para criar o banco de dados e as tabelas necessárias.
 
+![data_structure](/doc/data_structure.png)
+
 ### Execução do ETL
 
 O ETL foi desenvolvido em Python 3.11. Para instalar as dependências necessárias, execute:
