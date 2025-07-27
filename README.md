@@ -6,6 +6,7 @@ O repositório está organizado da seguinte maneira:
 
 * `/sql/`: scripts T-SQL para a criação das estruturas de dados.
 * `/etl/`: script Python para download e carga dos dados históricos a partir do website da Binance.
+* `/ml/`: script Python para criação do modelo de machine learning.
 * `/doc/`: assets da documentação.
 
 ### Configuração do banco de dados
