@@ -13,6 +13,15 @@
             "program": "main.py",
             "args": ["--name", "ETHBTC", "LTCBTC", "--start", "01-2020", "--end", "12-2020"],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "ml",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/ml/",
+            "envFile": "${workspaceFolder}/ml/.env",
+            "program": "main.py",
+            "console": "integratedTerminal"
         }
     ]
 }
