@@ -43,3 +43,16 @@ Por exemplo, para baixar os dados históricos dos pares ETH/BTC e LTC/BTC do per
 A cada execução, a tabela `BINANCE_SYMBOL` é atualizada com todos os pares disponíveis no catálogo da Binance.
 
 Os arquivos baixados são salvos temporariamente na pasta `/etl/stage/` e, conforme são carregados para o banco de dados, são movidos para a pasta `/etl/archive/`.
+
+### Criação dos datasets
+
+A criação dos datasets é feita via T-SQL. Neste momento, somente os dados de [k-lines](https://en.wikipedia.org/wiki/Candlestick_chart) são utilizados para tomada de decisão. A lógica utilizada é:
+
+1. Cada dataset é formado por um intervalo de 2 horas de k-lines;
+2. Em cada dataset, os primeiros 90 minutos são considerados como dados históricos (passado) e os 30 minutos seguintes como futuro;
+3. No 90º minuto, o valor de fechamento é utilizado como valor hipotético de compra;
+4. Se, dentro dos 30 minutos seguintes o valor do ativo ultrapassar o valor de compra acrescido de 3%, a operação é considerada viável (sucesso).
+
+Os datasets gerados são utilizados para treinamento do robô utilizando técnicas de machine learning.
+
+Os scripts estão disponíveis no arquivo `/sql/DML.sql`.
