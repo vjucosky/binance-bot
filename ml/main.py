@@ -1,3 +1,7 @@
+import torch.nn as nn
+import torch
+
+
 from sqlalchemy import Connection, create_engine, text
 from torch.utils.data import Dataset, DataLoader
 from settings import DATABASE_SETTINGS
@@ -67,6 +71,22 @@ class KLineDataset(Dataset):
         return dataset.to_numpy(), result
 
 
+class NeuralNetwork(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(9 * 90, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 2)
+        )
+
+    def forward(self, input: torch.Tensor):
+        raise NotImplementedError()
+
+
 if __name__ == '__main__':
     engine = create_engine(**DATABASE_SETTINGS)
 
@@ -74,4 +94,6 @@ if __name__ == '__main__':
 
     kline_dataset = KLineDataset(connection)
 
-    dataloader = DataLoader(kline_dataset)
+    dataloader = DataLoader(kline_dataset, 3)
+
+    model = NeuralNetwork()
