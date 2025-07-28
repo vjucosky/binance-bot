@@ -6,10 +6,6 @@ USE STUDY
 
 EXECUTE BINANCE_DATASET_KLINE_LOAD
 
-/*
-	Métricas para validação inicial dos datasets gerados.
-*/
-
 SELECT
 	COUNT(*) AS ROW_COUNT,
 	MAX(DATASET_NUMBER) AS DATASET_COUNT,
