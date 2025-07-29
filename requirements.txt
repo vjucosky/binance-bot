@@ -1,4 +1,6 @@
+cryptography==45.0.5
 sqlalchemy==2.0.41
+websockets==15.0.1
 requests==2.32.4
 pyodbc==5.2.0
 pandas==2.3.1
