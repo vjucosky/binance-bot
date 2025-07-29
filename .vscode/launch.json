@@ -22,6 +22,15 @@
             "envFile": "${workspaceFolder}/ml/.env",
             "program": "main.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "bot",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/bot/",
+            "envFile": "${workspaceFolder}/bot/.env",
+            "program": "main.py",
+            "console": "integratedTerminal"
         }
     ]
 }
