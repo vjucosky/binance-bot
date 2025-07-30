@@ -5,63 +5,74 @@ from pandas import read_sql_query
 
 
 class KLineDataset(Dataset):
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: Connection, name: str, ticks: int, profit: float):
         self.connection = connection
+        self.name = name
+        self.ticks = ticks
+        self.profit = profit
 
     def __len__(self):
         length = self.connection.execute(text('''
-            SELECT MAX(DATASET_NUMBER) AS DATASET_LENGTH
-            FROM BINANCE_DATASET_KLINE
-        ''')).one()[0]
+            SELECT MAX(NUMBER) AS NUMBER
+            FROM BINANCE_DATASET
+            WHERE [NAME] = :name
+        '''), {
+            'name': self.name
+        }).one()[0]
 
         return length
 
     def __getitem__(self, index: int):
         dataset = read_sql_query(text('''
-            DECLARE @CURRENT_TICK AS int = 31
-
             SELECT
-                TRADE_COUNT,
-                OPEN_VALUE,
-                HIGH_VALUE,
-                LOW_VALUE,
-                CLOSE_VALUE,
-                BASE_ASSET_VOLUME,
-                BASE_ASSET_TAKER_BUY_VOLUME,
-                QUOTE_ASSET_VOLUME,
-                QUOTE_ASSET_TAKER_BUY_VOLUME
-            FROM BINANCE_DATASET_KLINE
+                BDK.TRADE_COUNT,
+                BDK.OPEN_VALUE,
+                BDK.HIGH_VALUE,
+                BDK.LOW_VALUE,
+                BDK.CLOSE_VALUE,
+                BDK.BASE_ASSET_VOLUME,
+                BDK.BASE_ASSET_TAKER_BUY_VOLUME,
+                BDK.QUOTE_ASSET_VOLUME,
+                BDK.QUOTE_ASSET_TAKER_BUY_VOLUME
+            FROM BINANCE_DATASET AS BD
+            INNER JOIN BINANCE_DATASET_KLINE AS BDK
+                ON BD.ID = BDK.DATASET_ID
             WHERE
-                DATASET_NUMBER = :index
-                AND DATASET_ROW >= @CURRENT_TICK
-            ORDER BY DATASET_ROW
+                BD.[NAME] = :name
+                AND BD.NUMBER = :index
+                AND BDK.[ROW] > :ticks
+            ORDER BY BDK.[ROW]
         '''), connection, params={
-            'index': index
+            'name': self.name,
+            'index': index,
+            'ticks': self.ticks
         })
 
         result = connection.execute(text('''
-            DECLARE @PROFIT_MARGIN AS decimal(18, 8) = 1.03
-            DECLARE @CURRENT_TICK AS int = 31
-
             SELECT
                 MAX(CASE
-                    WHEN [SOURCE].DATASET_ROW < @CURRENT_TICK AND (
-                        [SOURCE].OPEN_VALUE >= [TARGET].CLOSE_VALUE * @PROFIT_MARGIN
-                        OR [SOURCE].HIGH_VALUE >= [TARGET].CLOSE_VALUE * @PROFIT_MARGIN
-                        OR [SOURCE].LOW_VALUE >= [TARGET].CLOSE_VALUE * @PROFIT_MARGIN
-                        OR [SOURCE].CLOSE_VALUE >= [TARGET].CLOSE_VALUE * @PROFIT_MARGIN
+                    WHEN [SOURCE].[ROW] <= :ticks AND (
+                        [SOURCE].OPEN_VALUE >= [TARGET].CLOSE_VALUE * :profit
+                        OR [SOURCE].HIGH_VALUE >= [TARGET].CLOSE_VALUE * :profit
+                        OR [SOURCE].LOW_VALUE >= [TARGET].CLOSE_VALUE * :profit
+                        OR [SOURCE].CLOSE_VALUE >= [TARGET].CLOSE_VALUE * :profit
                     ) THEN 1
-                    WHEN [SOURCE].DATASET_ROW < @CURRENT_TICK THEN 0
+                    WHEN [SOURCE].[ROW] <= :ticks THEN 0
                 END) AS IS_PROFITABLE
-            FROM BINANCE_DATASET_KLINE AS [SOURCE]
+            FROM BINANCE_DATASET AS BD
+            INNER JOIN BINANCE_DATASET_KLINE AS [SOURCE]
+                ON BD.ID = [SOURCE].DATASET_ID
             INNER JOIN BINANCE_DATASET_KLINE AS [TARGET]
-                ON
-                    [SOURCE].DATASET_NUMBER = [TARGET].DATASET_NUMBER
-                    AND [TARGET].DATASET_ROW = @CURRENT_TICK
-            WHERE [SOURCE].DATASET_NUMBER = :index
-            GROUP BY [SOURCE].DATASET_NUMBER
+                ON BD.ID = [TARGET].DATASET_ID
+            WHERE
+                BD.[NAME] = :name
+                AND BD.NUMBER = :index
+                AND [TARGET].[ROW] = :ticks + 1
         '''), {
-            'index': index
+            'name': self.name,
+            'index': index,
+            'ticks': self.ticks,
+            'profit': self.profit
         }).one()[0]
 
         return dataset.to_numpy(), result
