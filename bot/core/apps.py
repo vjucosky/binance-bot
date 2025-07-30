@@ -6,11 +6,21 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from sqlalchemy.orm import scoped_session
 from core.models import Event, Response
 from websockets import ClientConnection
+from pandas import DataFrame
 from base64 import b64encode
 from pathlib import Path
 from uuid import uuid4
 from time import time
 from os import getenv
+
+
+class Engine():
+    def __init__(self, scoped_session: scoped_session, symbol: str):
+        self.scoped_session = scoped_session
+        self.symbol = symbol
+
+    def compute(self, dataframe: DataFrame):
+        raise NotImplementedError()
 
 
 class Bot():
